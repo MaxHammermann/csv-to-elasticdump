@@ -1,0 +1,14 @@
+{
+  "name": "rtdb_csv_to_elasticdumpjson",
+  "version": "1.0.0",
+  "description": "convert a csv to the json needed by ElasticDump for an Elasticsearch import",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Max Hammermann",
+  "license": "ISC",
+  "dependencies": {
+    "csvtojson": "^2.0.10"
+  }
+}
