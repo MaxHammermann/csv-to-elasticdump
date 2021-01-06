@@ -3,7 +3,8 @@ if (process.argv.length <= 2) {
     console.log('Usage: run $node index.js --csvFilePath [path.csv] --outputFileName [name.json]')
     console.log('Options: \n --csvFilePath \t Path to csv to convert (needed) \n --outputFileName \t ' +
         'Name of the json created (needed) \n --delimiter \t Delimiter seperating columns (optional). ' +
-        'Default "\\t", specify as --delimiter "\\n" ')
+        'Default "auto", specify as --delimiter "\\n" \n' + 
+        '--eol \t End of line - If omitted; auto-attempting, specify as --eol "\\n"')
     process.exit(1);
 }
 
@@ -31,20 +32,29 @@ let delimiterIndex = process.argv.indexOf('--delimiter')
 if (delimiterIndex > -1 && process.argv[delimiterIndex + 1] != null) {
     delimiter = process.argv[delimiterIndex + 1];
 } else {
-    delimiter = '\t'
+    delimiter = 'auto'
+}
+
+let eol
+let eolIndex = process.argv.indexOf('--eol')
+if (eolIndex > -1 && process.argv[eolIndex + 1] != null) {
+    eol = process.argv[eolIndex + 1];
+} else {
+    eol = null
 }
 
 const parserParameters = {
     quote: "off",
+    eol: eol,
     delimiter: delimiter,
     checkType: true
 }
 
 //TODO: use streams to read and write -> single lines
 const fsLibrary = require('fs').promises
-const csv = require('csvtojson')
-let resultJson
-csv(parserParameters)
+const csvtojson = require('csvtojson');
+let resultJson;
+csvtojson(parserParameters)
     .fromFile(csvFilePath)
     //Convert to string and modify JSON notation for Elasticdump
     .then(async (jsonObj) => {
