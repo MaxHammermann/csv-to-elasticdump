@@ -1,70 +1,128 @@
 //TODO: handle text & parameters with npm 'commander'
-if (process.argv.length <= 2) {
-    console.log('Usage: run $node index.js --csvFilePath [path.csv] --outputFileName [name.json]')
-    console.log('Options: \n --csvFilePath \t Path to csv to convert (needed) \n --outputFileName \t ' +
-        'Name of the json created (needed) \n --delimiter \t Delimiter seperating columns (optional). ' +
-        'Default "auto", specify as --delimiter "\\n" \n' + 
-        '--eol \t End of line - If omitted; auto-attempting, specify as --eol "\\n"')
-    process.exit(1);
+let dataSet
+let dataSetIndex = process.argv.indexOf('--dataset')
+if (dataSetIndex > -1 && process.argv[dataSetIndex + 1] != null) {
+  dataSet = process.argv[dataSetIndex + 1];
+} else {
+  console.error('--dataset argument required! taxonomy/bibliography?');
 }
 
-let csvFilePath
-let csvFilePathIndex = process.argv.indexOf('--csvFilePath')
-if (csvFilePathIndex > -1 && process.argv[csvFilePathIndex + 1] != null) {
-    csvFilePath = process.argv[csvFilePathIndex + 1];
+if (process.argv.length <= 2) {
+  console.log('Usage: run $node index.js --dumpFilePath [path.csv] --outputFileName [name.json]')
+  console.log('Options: \n --dumpFilePath \t Path to csv to convert (needed) \n --outputFileName \t ' +
+    'Name of the json created (needed) \n --delimiter \t Delimiter seperating columns (optional). ' +
+    'Default "auto", specify as --delimiter "\\n" \n' +
+    '--eol \t End of line - If omitted; auto-attempting, specify as --eol "\\n"')
+  process.exit(1);
+}
+
+let dumpFilePath
+let dumpFilePathIndex = process.argv.indexOf('--dumpFilePath')
+if (dumpFilePathIndex > -1 && process.argv[dumpFilePathIndex + 1] != null) {
+  dumpFilePath = process.argv[dumpFilePathIndex + 1];
 } else {
-    console.error('--csvFilePath argument required! 💩');
-    process.exit(1);
+  console.error('--dumpFilePath argument required! 💩');
+  process.exit(1);
 }
 
 let outputFileName
 let outputFileNameIndex = process.argv.indexOf('--outputFileName')
 if (outputFileNameIndex > -1 && process.argv[outputFileNameIndex + 1] != null) {
-    outputFileName = process.argv[outputFileNameIndex + 1];
-    outputFileName += (outputFileName.includes('.json')) ? '' : '.json'
+  outputFileName = process.argv[outputFileNameIndex + 1];
+  outputFileName += (outputFileName.includes('.json')) ? '' : '.json'
 } else {
-    console.error('--outputFileName argument required! 💩');
-    process.exit(1);
+  console.error('--outputFileName argument required! 💩');
+  process.exit(1);
 }
 
 let delimiter
 let delimiterIndex = process.argv.indexOf('--delimiter')
 if (delimiterIndex > -1 && process.argv[delimiterIndex + 1] != null) {
-    delimiter = process.argv[delimiterIndex + 1];
+  delimiter = process.argv[delimiterIndex + 1];
 } else {
-    delimiter = 'auto'
+  delimiter = 'auto'
 }
+
+
+const toJson = true
 
 let eol
 let eolIndex = process.argv.indexOf('--eol')
 if (eolIndex > -1 && process.argv[eolIndex + 1] != null) {
-    eol = process.argv[eolIndex + 1];
+  eol = process.argv[eolIndex + 1];
 } else {
-    eol = null
+  eol = null
 }
 
 const parserParameters = {
-    quote: "off",
-    eol: eol,
-    delimiter: delimiter,
-    checkType: true
+  quote: "off",
+  eol: eol,
+  delimiter: delimiter,
+  checkType: true
 }
 
-//TODO: use streams to read and write -> single lines
-const fsLibrary = require('fs').promises
+const fs = require('fs')
 const csvtojson = require('csvtojson');
-let resultJson;
-csvtojson(parserParameters)
-    .fromFile(csvFilePath)
+const headerFields = require("./config/csv_header");
+const readline = require('readline');
+const removeChars = require('./modules').removeCharacters
+const tmpFilePath = './tmp/temp_tsv.tsv'
+
+async function processLineByLine() {
+  const fileStream = fs.createReadStream(dumpFilePath, {encoding: 'utf16le'});
+  let csvHeader
+
+  if (dataSet.indexOf(Object.keys(headerFields))) {
+    csvHeader = headerFields[dataSet].join('\t').toString() + '\r'
+  } else {
+    throw new Error(`Csv headers could not be specified with provided dataset name. \n Reading ${dumpFilePath}`)
+  }
+
+  const rl = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity
+  });
+
+  const tmpWriteStream = fs.createWriteStream(tmpFilePath, {encoding: 'utf8'})
+  tmpWriteStream.write(csvHeader)
+
+  // Note: we use the crlfDelay option to recognize all instances of CR LF
+  // ('\r\n') in input.txt as a single line break.
+  for await (const line of rl) {
+    // Each line in input.txt will be successively available here as `line`.
+    let newLine = removeChars(line) + '\r'
+    tmpWriteStream.write(newLine)
+  }
+}
+
+processLineByLine().then(() => {
+  if (toJson) {
+    saveAsJson()
+  }
+})
+
+
+function saveAsJson() {
+  csvtojson(parserParameters)
+    .fromFile(tmpFilePath)
     //Convert to string and modify JSON notation for Elasticdump
-    .then(async (jsonObj) => {
-        //Strip JSON Array from commas after every JSON Object
-        resultJson = JSON.stringify(jsonObj).replace(/(?<=})(\s*,)/g, "\n")
-        //Strip first and last char being [ & ]
-        resultJson = resultJson.slice(1, -1)
-        await fsLibrary.writeFile(`${outputFileName}`, resultJson, (error) => {
-            if (error) throw err;
-        }).then(() => {
-            console.log(`Succesfully wrote ${(resultJson.match(/\n/g) || '').length + 1} lines`)
+    //onError, onCompleted callbacks possible
+    .subscribe((json, lineNumber) => {
+      return new Promise(async (resolve) => {
+        fs.appendFile(`${outputFileName}`, JSON.stringify(json) + '\n', (error) => {
+          if (error) throw error;
         })
+        updateProgress(lineNumber)
+        resolve()
+      })
     })
+    .then(() => {
+      console.log("\n complete")
+    })
+}
+
+function updateProgress(count) {
+  process.stdout.clearLine();
+  process.stdout.cursorTo(0);
+  process.stdout.write("Processed: " + count);
+}
