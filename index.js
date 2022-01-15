@@ -2,7 +2,7 @@
 let dataSet
 let dataSetIndex = process.argv.indexOf('--dataset')
 if (dataSetIndex > -1 && process.argv[dataSetIndex + 1] != null) {
-  dataSet = process.argv[dataSetIndex + 1];
+  dataSet = process.argv[dataSetIndex + 1].toLowerCase();
 } else {
   console.error('--dataset argument required! taxonomy/bibliography?');
 }
@@ -66,6 +66,8 @@ const csvtojson = require('csvtojson');
 const headerFields = require("./config/csv_header");
 const readline = require('readline');
 const removeChars = require('./modules').removeCharacters
+const updateProgress = require('./modules').updateProgress
+const deleteExisting = require('./modules').deleteExisting
 const tmpFilePath = './tmp/temp_tsv.tsv'
 
 async function processLineByLine() {
@@ -98,35 +100,31 @@ async function processLineByLine() {
   }
 }
 
+async function saveAsJson() {
+  deleteExisting(outputFileName).then(() => {
+    csvtojson(parserParameters)
+      .fromFile(tmpFilePath)
+      //Convert to string and modify JSON notation for Elasticdump
+      //onError, onCompleted callbacks possible
+      .subscribe((json, lineNumber) => {
+        return new Promise(async (resolve) => {
+          //append lineByLine to final JSON. Add \n to break after every Object.
+          fs.appendFile(`${outputFileName}`, JSON.stringify(json) + '\n', (error) => {
+            if (error) throw error;
+          })
+          updateProgress(lineNumber)
+          resolve()
+        })
+      })
+      .then(() => {
+        console.log("\n complete")
+      })
+  })
+}
+
 processLineByLine().then(() => {
   if (toJson) {
-    saveAsJson()
+    //TODO: After conversion, read into ES with elasticdump
+    saveAsJson().then()
   }
 })
-
-
-function saveAsJson() {
-  csvtojson(parserParameters)
-    .fromFile(tmpFilePath)
-    //Convert to string and modify JSON notation for Elasticdump
-    //onError, onCompleted callbacks possible
-    .subscribe((json, lineNumber) => {
-      return new Promise(async (resolve) => {
-        //append lineByLine to final JSON. Add \n to break after every Object.
-        fs.appendFile(`${outputFileName}`, JSON.stringify(json) + '\n', (error) => {
-          if (error) throw error;
-        })
-        updateProgress(lineNumber)
-        resolve()
-      })
-    })
-    .then(() => {
-      console.log("\n complete")
-    })
-}
-
-function updateProgress(count) {
-  process.stdout.clearLine();
-  process.stdout.cursorTo(0);
-  process.stdout.write("Processed: " + count);
-}
