@@ -7,7 +7,7 @@ The csv conversion is done by utilizing the npm package 'csvtojson'.
 #####Please contribute to make this a NPM package
 
 ## Features
-Turn a (csv)tsv
+Turn a raw (filemaker) database dump (.txt) into a list of JSON objects for Elasticdump. 
 ```textmate
 biblio_id   author  year    titel   source  link
 00001	Hoge, A. R.  & S. A. R. W. L. Romano-Hoge	1983	Notas sobre micro e ultra-estructura de “Oberhäutchen” em Viperoidea.	Mem. Inst. Butantan 44/45: 81-118 [1980/81]	http://bibliotecadigital.butantan.gov.br/colecao/memorias-do-instituto-butantan
@@ -16,7 +16,7 @@ biblio_id   author  year    titel   source  link
 00004	Abe,A.S. & Fernandes,W.	1977	Polymorphism in Spilotes pullatus anomalepis BOCOURT (Reptilia, Serpentes: Colubridae).	Journal of Herpetology 11 (1): 98-100	http://www.jstor.org/action/showPublication?journalCode=jherpetology
 ```
 
-into multiple JSON lines **not** seperated by a comma
+Into multiple JSON lines **not** seperated by a comma
 ```JSON
 {"biblio_id":1,"author":"Hoge, A. R.  & S. A. R. W. L. Romano-Hoge","year":1983,"titel":"Notas sobre micro e ultra-estructura de “Oberhäutchen” em Viperoidea.","source":"Mem. Inst. Butantan 44/45: 81-118 [1980/81]","link":"http://bibliotecadigital.butantan.gov.br/colecao/memorias-do-instituto-butantan"}
 {"biblio_id":2,"author":"Abdala V.","year":1990,"titel":"MORPHOMETRICS IN TWO SPECIES OF GENUS PHIMOPHIS (COPE OPHIDIA COLUBRIDAE) [in Spanish].","source":"Acta Zoologica Lilloana 39 (2): 85-90.","link":""}
@@ -32,16 +32,17 @@ Clone the repository and perform a
 
 Run the index.js file with node by executing
 
-    node index.js --csvFilePath [path.csv] --outputFileName [name.json]
+    node index.js --dataset [name] --csvFilePath [path.csv] --outputFileName [name.json]
 
 **Options**
 
 * **csvFilePath**: (required)       Path to csv to convert
+* **dataset**: (required)       'taxonomy' or 'bibliography'
 * **outputFileName**: (required)        Name of the json created 
 * **delimiter**: (optional)     Delimiter seperating columns. Default "\t", specify as --delimiter "\n" 
 
 
-## Before using Elasticdump
+## Using Elasticdump
 The JSON you want to index needs to be the value of the `_source` object when importing, e.g.
 ```JSON
 {
@@ -50,15 +51,7 @@ The JSON you want to index needs to be the value of the `_source` object when im
   "_id": "1",
   "_score": 1,
   "_source": {
-    "titel": "Polymorphism in Spilotes pullatus anomalepis BOCOURT (Reptilia, Serpentes: Colubridae).",
-    "year": 1977,
-    "biblio_id": 6,
-    "author": "Abe,A.S. & Fernandes,W.",
-    "id": 1,
-    "@version": "1",
-    "@timestamp": "2019-12-04T13:49:17.438Z",
-    "link": "http://www.jstor.org/action/showPublication?journalCode=jherpetology",
-    "source": "Journal of Herpetology 11 (1): 98-100"
+    ...JSON
   }
 }
 ```
@@ -66,3 +59,7 @@ The JSON you want to index needs to be the value of the `_source` object when im
 This can be achieved upon indexing by calling Elasticdump with the `transform` option
 
     --transform="doc._source=Object.assign({},doc)"
+
+to conclude
+
+    elasticdump --input [file.json] --output http://[ESuser]:[passwd]@[host]:9200/[index] --transform="doc._source=Object.assign({},doc)"
