@@ -69,25 +69,28 @@ const removeChars = require('./modules').removeCharacters
 const tmpFilePath = './tmp/temp_tsv.tsv'
 
 async function processLineByLine() {
-  const fileStream = fs.createReadStream(dumpFilePath, {encoding: 'utf16le'});
-  let csvHeader
+  //fs for input txt file - utf16le necessary
+  const dumpFileStream = fs.createReadStream(dumpFilePath, {encoding: 'utf16le'});
 
+  let csvHeader
+  //check if there is a csv header for specified dataSet
   if (dataSet.indexOf(Object.keys(headerFields))) {
     csvHeader = headerFields[dataSet].join('\t').toString() + '\r'
   } else {
     throw new Error(`Csv headers could not be specified with provided dataset name. \n Reading ${dumpFilePath}`)
   }
 
-  const rl = readline.createInterface({
-    input: fileStream,
-    crlfDelay: Infinity
-  });
-
+  //Write header into tmp dir to append tsv data in next step
   const tmpWriteStream = fs.createWriteStream(tmpFilePath, {encoding: 'utf8'})
   tmpWriteStream.write(csvHeader)
 
-  // Note: we use the crlfDelay option to recognize all instances of CR LF
-  // ('\r\n') in input.txt as a single line break.
+  const rl = readline.createInterface({
+    input: dumpFileStream,
+    crlfDelay: Infinity
+    // Note: we use the crlfDelay option to recognize all instances of CR LF
+    // ('\r\n') in input.txt as a single line break.
+  });
+
   for await (const line of rl) {
     // Each line in input.txt will be successively available here as `line`.
     let newLine = removeChars(line) + '\r'
@@ -109,6 +112,7 @@ function saveAsJson() {
     //onError, onCompleted callbacks possible
     .subscribe((json, lineNumber) => {
       return new Promise(async (resolve) => {
+        //append lineByLine to final JSON. Add \n to break after every Object.
         fs.appendFile(`${outputFileName}`, JSON.stringify(json) + '\n', (error) => {
           if (error) throw error;
         })

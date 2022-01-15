@@ -1,6 +1,7 @@
 const replacements = require('./config/char_replacements.js')
 
-// consume (key, val) returns val without given chars
+// consumes (val)
+// removes chars specified in config/char_replacements
 const removeCharacters = function(val) {
   if (typeof val === 'string') {
     let result = val;
